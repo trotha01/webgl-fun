@@ -3,19 +3,14 @@
 const vertexShader = `
         precision mediump float;
 
-        // uniform float coolestTemp;
-        // uniform float tempRange;
         uniform float deltaTime;
 
         attribute vec2 position;
         attribute vec2 velocity;
-
-        // varying float temperature;
+        attribute vec2 a_texcoord;
 
         void main () {
-            // temperature = (position.x + 1.0) / tempRange;
             gl_Position = vec4(position + (velocity * deltaTime), 0, 1.0);
-            // gl_Position = vec4(position, 0.0, 1.0);
             gl_PointSize = 20.0;
         }
 `;
@@ -23,14 +18,7 @@ const vertexShader = `
 const fragmentShader = `
         precision mediump float;
 
-        // uniform vec3 coolestColor;
-        // uniform vec3 hottestColor;
-
-        // varying float temperature;
-
         void main () {
-            // vec3 color = mix(coolestColor, hottestColor, temperature);
-            // gl_FragColor = vec4(color, 1.0);
             gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
         }
 `;
@@ -57,7 +45,7 @@ const velocities = [
 ];
 
 const buffers = initBuffers(gl, positions, velocities);
-// const buffers = initBuffers(gl, positions);
+// const buffers = initTextures(gl, positions);
 
 // Create Program
 const shaderProgram = initShaderProgram(gl, vertexShader, fragmentShader);
@@ -91,7 +79,17 @@ function render(now) {
   totalTime += deltaTime
   then = now;
 
-  drawScene(gl, programInfo, buffers, vertexCount, totalTime);
+  /*
+  {
+    // render to targetTexture
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    drawScene(gl, programInfo, buffers, vertexCount, totalTime);
+  }
+  */
+  {
+
+    drawScene(gl, programInfo, buffers, vertexCount, totalTime);
+  }
 
   requestAnimationFrame(render);
 }
