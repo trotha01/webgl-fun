@@ -17,18 +17,19 @@ canvas.addEventListener("webglcontextlost", function(event) {
 
 // -- Declare variables for the particle system
 
+// var NUM_PARTICLES = 1000000;
 var NUM_PARTICLES = 10;
 var ACCELERATION = 0;
 
 var appStartTime = Date.now();
 var currentSourceIdx = 0;
 
-var program = initProgram();
+var calcProgram = initCalcProgram('vs-calc', 'fs-calc');
+var viewProgram = initViewProgram('vs-draw', 'fs-draw');
 
-// Get uniform locations for the draw program
-var drawTimeLocation = gl.getUniformLocation(program, 'u_time');
-// var drawAccelerationLocation = gl.getUniformLocation(program, 'u_acceleration');
-var drawColorLocation = gl.getUniformLocation(program, 'u_color');
+// Get uniform locations for the calc program
+var drawTimeLocation = gl.getUniformLocation(calcProgram, 'u_time');
+var drawColorLocation = gl.getUniformLocation(calcProgram, 'u_color');
 
 // -- Initialize particle data
 
@@ -110,9 +111,8 @@ for (var i = 0; i < particleVAOs.length; ++i) {
 
 }
 
-function initProgram() {
-
-    // Setup program for transform feedback
+function initViewProgram(vertShader, fragShader) {
+    // Setup viewProgram for viewing calc results
     function createShader(gl, source, type) {
         var shader = gl.createShader(type);
         gl.shaderSource(shader, source);
@@ -120,19 +120,17 @@ function initProgram() {
         return shader;
     }
 
-    var vshader = createShader(gl, getShaderSource('vs-draw'), gl.VERTEX_SHADER);
-    var fshader = createShader(gl, getShaderSource('fs-draw'), gl.FRAGMENT_SHADER);
+    var vshader = createShader(gl, getShaderSource(vertShader), gl.VERTEX_SHADER);
+    var fshader = createShader(gl, getShaderSource(fragShader), gl.FRAGMENT_SHADER);
 
-    var program = gl.createProgram();
-    gl.attachShader(program, vshader);
-    gl.attachShader(program, fshader);
+    var viewProgram = gl.createProgram();
+    gl.attachShader(viewProgram, vshader);
+    gl.attachShader(viewProgram, fshader);
 
-    var varyings = ['v_position', 'v_velocity', 'v_spawntime', 'v_lifetime'];
-    gl.transformFeedbackVaryings(program, varyings, gl.SEPARATE_ATTRIBS);
-    gl.linkProgram(program);
+    gl.linkProgram(viewProgram);
 
     // check
-    var log = gl.getProgramInfoLog(program);
+    var log = gl.getProgramInfoLog(viewProgram);
     if (log) {
         console.log(log);
     }
@@ -150,26 +148,116 @@ function initProgram() {
     gl.deleteShader(vshader);
     gl.deleteShader(fshader);
 
-    return program;
+    return viewProgram;
 }
 
-gl.useProgram(program);
-gl.uniform4f(drawColorLocation, 0.0, 1.0, 1.0, 1.0);
-// gl.uniform2f(drawAccelerationLocation, 0.0, ACCELERATION);
+function initCalcProgram(vertShader, fragShader) {
 
-// gl.enable(gl.BLEND);
-// gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+    // Setup calcProgram for transform feedback
+    function createShader(gl, source, type) {
+        var shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        return shader;
+    }
+
+    var vshader = createShader(gl, getShaderSource(vertShader), gl.VERTEX_SHADER);
+    var fshader = createShader(gl, getShaderSource(fragShader), gl.FRAGMENT_SHADER);
+
+    var calcProgram = gl.createProgram();
+    gl.attachShader(calcProgram, vshader);
+    gl.attachShader(calcProgram, fshader);
+
+    var varyings = ['v_position', 'v_velocity', 'v_spawntime'];
+    gl.transformFeedbackVaryings(calcProgram, varyings, gl.SEPARATE_ATTRIBS);
+    gl.linkProgram(calcProgram);
+
+    // check
+    var log = gl.getProgramInfoLog(calcProgram);
+    if (log) {
+        console.log(log);
+    }
+
+    log = gl.getShaderInfoLog(vshader);
+    if (log) {
+        console.log(log);
+    }
+
+    log = gl.getShaderInfoLog(fshader);
+    if (log) {
+        console.log(log);
+    }
+
+    gl.deleteShader(vshader);
+    gl.deleteShader(fshader);
+
+    return calcProgram;
+}
+
+gl.useProgram(calcProgram);
+gl.uniform4f(drawColorLocation, 0.0, 1.0, 1.0, 1.0);
+
+function createTexture(gl) {
+  const targetTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, targetTexture);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0, // level
+    gl.RGBA, // internalFormat,
+    canvas.width, // targetTextureWidth,
+    canvas.height, // targetTextureHeight
+    0, // border,
+    gl.RGBA, // format
+    gl.UNSIGNED_BYTE, // type
+    null, // data
+  );
+
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  // attach the texture as the first color attachment
+  gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0, // attachmentPoint. Shader outputs here by linking 'out' variables
+    gl.TEXTURE_2D,
+    targetTexture,
+    0, // mipmap level
+  );
+
+  return targetTexture
+}
+
+// Create framebuffer1
+const fb1 = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, fb1);
+const targetTexture1 = createTexture(gl)
+
+// Create framebuffer2
+const fb2 = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, fb2);
+const targetTexture2 = createTexture(gl)
+
+// Set the viewport
+gl.viewport(0, 0, canvas.width, canvas.height);
+
+// Set the clear color
+gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
 function render() {
 
+  // RUN CALCULATIONS
+  {
     var time = Date.now() - appStartTime;
     var destinationIdx = (currentSourceIdx + 1) % 2;
 
-    // Set the viewport
-    gl.viewport(0, 0, canvas.width, canvas.height - 10);
+    // render to targetTexture1 in framebuffer1
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb1);
+    // gl.bindTexture(gl.TEXTURE_2D, targetTexture1);
+    // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     // Clear color buffer
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     // Toggle source and destination VBO
@@ -194,18 +282,51 @@ function render() {
     gl.beginTransformFeedback(gl.POINTS);
     gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
     gl.endTransformFeedback();
+  }
 
-    // Ping pong the buffers
-    currentSourceIdx = (currentSourceIdx + 1) % 2;
+  // VIEW RESULT
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fb1);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  gl.blitFramebuffer(
+    0, 0, canvas.width, canvas.height, // src bounds
+    0, 0, canvas.width, canvas.height, // dest bounds
+    gl.COLOR_BUFFER_BIT,
+    gl.LINEAR,
+  )
 
-    requestAnimationFrame(render);
+  /*
+  {
+    // set sourceVAO to the last clculation destination
+    var sourceVAO = particleVAOs[currentSourceIdx + 1 % 2];
+    gl.bindVertexArray(sourceVAO);
+    // NOTE: The following line shouldn't be necessary, but are required to work in ANGLE
+    // due to a bug in its handling of transform feedback objects.
+    // https://bugs.chromium.org/p/angleproject/issues/detail?id=2051
+    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, particleVBOs[destinationIdx][POSITION_LOCATION]);
+
+    // draw to canvas, not a framebuffer
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // read from targetTexture1
+    gl.bindTexture(gl.TEXTURE_2D, targetTexture1);
+
+    gl.drawArrays(gl.POINTS, 0, NUM_PARTICLES);
+  }
+  */
+
+  // Ping pong the buffers
+  currentSourceIdx = (currentSourceIdx + 1) % 2;
+
+
+  requestAnimationFrame(render);
 }
 
 requestAnimationFrame(render);
 
 // If you have a long-running page, and need to delete WebGL resources, use:
 //
-// gl.deleteProgram(program);
+// gl.deleteProgram(calcProgram);
 // for (var i = 0; i < particleVAOs.length; ++i) {
 //     gl.deleteVertexArray(particleVAOs[i]); 
 //     gl.deleteTransformFeedback(particleTransformFeedbacks[i]);

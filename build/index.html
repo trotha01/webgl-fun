@@ -37,7 +37,7 @@ var app = Elm.Main.init({
     -->
 
     <!-- WebGL 2 shaders -->
-    <script id="vs-draw" type="x-shader/x-vertex">
+    <script id="vs-calc" type="x-shader/x-vertex">
         #version 300 es
         #define POSITION_LOCATION 0
         #define VELOCITY_LOCATION 1
@@ -50,8 +50,7 @@ var app = Elm.Main.init({
         precision highp sampler3D;
 
         uniform float u_time;
-        // uniform vec2 u_acceleration;
-        flat out vec4 vcolor;
+        uniform sampler2D texFramebuffer;
 
         layout(location = POSITION_LOCATION) in vec2 a_position;
         layout(location = VELOCITY_LOCATION) in vec2 a_velocity;
@@ -62,8 +61,13 @@ var app = Elm.Main.init({
         out vec2 v_position;
         out vec2 v_velocity;
         out float v_spawntime;
-        out float v_lifetime;
+        flat out vec4 vcolor;
 
+        vec4 forceField;
+
+        float rand(vec2 co){
+            return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+        }
 
         vec2 walls(vec2 position, vec2 velocity) {
           if (position.x >= 1.0 || position.x <= -1.0) {
@@ -80,12 +84,15 @@ var app = Elm.Main.init({
             if (a_spawntime == 0.0) {
                 // Generate a new particle
                 v_position = vec2(0.0, 0.0);
-                v_velocity = vec2(1.0, 0.8);
+                v_velocity = vec2(rand(vec2(a_ID, 0.0)) - 0.5, rand(vec2(a_ID, a_ID)));
                 v_spawntime = u_time;
                 vcolor = vec4(0.0, 1.0, 1.0, 1.0);
             } else {
                 v_velocity = walls(a_position, a_velocity);
                 v_position = a_position + 0.01 * v_velocity;
+
+                forceField = texture(texFramebuffer, v_position);
+
                 v_spawntime = a_spawntime;
                 vcolor = vec4(0.0, 1.0, 1.0, 1.0);
             }
@@ -95,14 +102,53 @@ var app = Elm.Main.init({
         }
     </script>
 
+    <script id="fs-calc" type="x-shader/x-fragment">
+        #version 300 es
+        precision highp float;
+        precision highp int;
+
+        #define POSITION_LOCATION 0
+
+        // uniform vec4 u_color;
+        flat in vec4 vcolor;
+
+        out vec4 color;
+
+        void main()
+        {
+            color = vcolor;
+        }
+    </script>
+
+    <script id="vs-draw" type="x-shader/x-vertex">
+        #version 300 es
+        #define POSITION_LOCATION 0
+
+        precision highp float;
+        precision highp int;
+        precision highp sampler3D;
+
+        layout(location = POSITION_LOCATION) in vec2 a_position;
+
+        out vec2 v_position;
+        flat out vec4 vcolor;
+
+        void main()
+        {
+          v_position = a_position;
+          vcolor = vec4(0.0, 1.0, 1.0, 1.0);
+
+          gl_Position = vec4(v_position, 0.0, 1.0);
+          gl_PointSize = 2.0;
+        }
+    </script>
+
     <script id="fs-draw" type="x-shader/x-fragment">
         #version 300 es
         precision highp float;
         precision highp int;
 
-        // uniform vec4 u_color;
         flat in vec4 vcolor;
-
         out vec4 color;
 
         void main()
