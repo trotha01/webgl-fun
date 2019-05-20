@@ -4,14 +4,20 @@
     <title>WebGL Fun</title>
     <meta charset='utf-8'/>
     <link rel='stylesheet' href='style.css' type='text/css'>
+    <script src="utility.js"></script>
+    <script src="gl-matrix-min.js"></script>
+    <script src="noise3D.js"></script>
     <!-- script type='text/javascript' src='../elm.js'></script -->
-    <!-- script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script -->
-    <!-- script src="https://webglfundamentals.org/webgl/resources/m4.js"></script -->
   </head>
 
   <body>
     <div id="elm"></div>
+    <!--
     <canvas id="game-canvas" height=400 width=400>Your browser does not seem to support
+      HTML5 canvas.</canvas>
+    -->
+
+    <canvas id="transform-feedback" height=400 width=400>Your browser does not seem to support
       HTML5 canvas.</canvas>
 
     <script>
@@ -22,58 +28,90 @@ var app = Elm.Main.init({
 
       app.ports.runGL.subscribe(function(data) {
         console.log('runGL')
-        // Synth.play(data.instrument, data.note, data.octave, data.duration);
       })
  */
     </script>
+    <!--
     <script type='text/javascript' src='gl.js'></script>
     <script type='text/javascript' src='game.js'></script>
-    <!--
-      <script type='text/javascript' src='glmatrix.js'></script>
-      <script type='text/javascript' src='square.js'></script>
-      -->
+    -->
 
-      <!--
-        <script type='text/javascript' src='glmatrix.js'></script>
-        <script type='text/javascript' src='modified-dot.js'></script>
-        -->
+    <!-- WebGL 2 shaders -->
+    <script id="vs-draw" type="x-shader/x-vertex">
+        #version 300 es
+        #define POSITION_LOCATION 0
+        #define VELOCITY_LOCATION 1
+        #define SPAWNTIME_LOCATION 2
+        #define LIFETIME_LOCATION 3
+        #define ID_LOCATION 4
 
-      <!--
-        <canvas id="canvas"></canvas>
+        precision highp float;
+        precision highp int;
+        precision highp sampler3D;
 
-        <script id="3d-vertex-shader" type="x-shader/x-vertex">
-          attribute vec4 a_position;
-          attribute vec2 a_texcoord;
-          
-          uniform mat4 u_matrix;
-          
-          varying vec2 v_texcoord;
-          
-          void main() {
-            // Multiply the position by the matrix.
-            gl_Position = u_matrix * a_position;
-          
-            // Pass the texcoord to the fragment shader.
-            v_texcoord = a_texcoord;
+        uniform float u_time;
+        // uniform vec2 u_acceleration;
+        flat out vec4 vcolor;
+
+        layout(location = POSITION_LOCATION) in vec2 a_position;
+        layout(location = VELOCITY_LOCATION) in vec2 a_velocity;
+        layout(location = SPAWNTIME_LOCATION) in float a_spawntime;
+        layout(location = LIFETIME_LOCATION) in float a_lifetime;
+        layout(location = ID_LOCATION) in float a_ID;
+
+        out vec2 v_position;
+        out vec2 v_velocity;
+        out float v_spawntime;
+        out float v_lifetime;
+
+
+        vec2 walls(vec2 position, vec2 velocity) {
+          if (position.x >= 1.0 || position.x <= -1.0) {
+            return vec2(-velocity.x, velocity.y);
           }
-        </script>
-
-        <script id="3d-fragment-shader" type="x-shader/x-fragment">
-          precision mediump float;
-          
-          // Passed in from the vertex shader.
-          varying vec2 v_texcoord;
-          
-          // The texture.
-          uniform sampler2D u_texture;
-          
-          void main() {
-             // gl_FragColor = texture2D(u_texture, v_texcoord);
-             gl_FragColor = texture2D(u_texture, vec2(0.0, 0.0));
+          if (position.y >= 1.0 || position.y <= -1.0) {
+            return vec2(velocity.x, -velocity.y);
           }
-        </script>
-        <script type='text/javascript' src='texture.js'></script>
-        -->
+          return velocity;
+        }
+
+        void main()
+        {
+            if (a_spawntime == 0.0) {
+                // Generate a new particle
+                v_position = vec2(0.0, 0.0);
+                v_velocity = vec2(1.0, 0.8);
+                v_spawntime = u_time;
+                vcolor = vec4(0.0, 1.0, 1.0, 1.0);
+            } else {
+                v_velocity = walls(a_position, a_velocity);
+                v_position = a_position + 0.01 * v_velocity;
+                v_spawntime = a_spawntime;
+                vcolor = vec4(0.0, 1.0, 1.0, 1.0);
+            }
+
+            gl_Position = vec4(v_position, 0.0, 1.0);
+            gl_PointSize = 2.0;
+        }
+    </script>
+
+    <script id="fs-draw" type="x-shader/x-fragment">
+        #version 300 es
+        precision highp float;
+        precision highp int;
+
+        // uniform vec4 u_color;
+        flat in vec4 vcolor;
+
+        out vec4 color;
+
+        void main()
+        {
+            color = vcolor;
+        }
+    </script>
+    <script type='text/javascript' src='transformfeedbackcopy.js'></script>
+
   </body>
 </html>
 
