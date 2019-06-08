@@ -62,9 +62,10 @@ var app = Elm.Main.init({
         out vec2 v_position;
         out vec2 v_velocity;
         out float v_spawntime;
-        out vec4 vcolor;
 
-        vec4 forceField;
+        vec4 pixel;
+        vec2 velocity1;
+        vec2 velocity2;
 
         float rand(vec2 co){
             return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
@@ -80,6 +81,14 @@ var app = Elm.Main.init({
           return velocity;
         }
 
+        vec2 collide(vec2 position, vec2 velocity) {
+          pixel = texture(texFramebuffer, position);
+          if (pixel.b > 0.0) {
+            return vec2(-velocity.x, -velocity.y);
+          }
+          return velocity;
+        }
+
         void main()
         {
             if (a_spawntime == 0.0) {
@@ -87,19 +96,20 @@ var app = Elm.Main.init({
                 v_position = vec2(0.0, 0.0);
                 v_velocity = vec2(rand(vec2(a_ID, 0.0)) - 0.5, rand(vec2(a_ID, a_ID)));
                 v_spawntime = u_time;
-                vcolor = vec4(0.0, 1.0, 1.0, 1.0);
             } else {
-                v_velocity = walls(a_position, a_velocity);
-                v_position = a_position + 0.01 * v_velocity;
+                velocity1 = walls(a_position, a_velocity);
+                velocity2 = collide(a_position, velocity1);
 
-                forceField = texture(texFramebuffer, v_position);
+                v_velocity = velocity2;
+                v_position = a_position + 0.01 * velocity2;
+
 
                 v_spawntime = a_spawntime;
-                vcolor = vec4(0.0, 1.0, 1.0, 1.0);
             }
 
             gl_Position = vec4(v_position, 0.0, 1.0);
-            gl_PointSize = 64.0;
+            // gl_PointSize = 64.0;
+            gl_PointSize = 8.0;
         }
     </script>
 
@@ -108,23 +118,18 @@ var app = Elm.Main.init({
         precision highp float;
         precision highp int;
 
-        in vec4 vcolor;
         uniform sampler2D atomTexture;
 
         out vec4 color;
 
         void main()
         {
-            color = vcolor;
-            if (gl_PointCoord == vec2(0.5, 0.5)) {
-              color = vec4(0, 1, 1, 1);
-            } else {
-              color = vec4(1, 0, 0, 1);
-            }
             // color = vec4(gl_PointCoord, 0.0, 1.0);
             // color = vec4(v_position, 0.0, 1.0);
-            // color = texture(atomTexture, vec2(gl_FragCoord.x, gl_FragCoord.y));
-            color = texture(atomTexture, vec2(gl_PointCoord.x, gl_PointCoord.y));
+            // color = texture(atomTexture, vec2(gl_FragCoord));
+            color = texture(atomTexture, vec2(gl_PointCoord));
+            // color = vec4(0, 0, 1, 1);
+            // color = texture(atomTexture, vec2(1, 1));
         }
     </script>
 

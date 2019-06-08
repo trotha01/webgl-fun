@@ -19,7 +19,7 @@ canvas.addEventListener("webglcontextlost", function(event) {
 // -- Declare variables for the particle system
 
 // var NUM_PARTICLES = 1000000;
-var NUM_PARTICLES = 10;
+var NUM_PARTICLES = 100;
 var ACCELERATION = 0;
 
 var appStartTime = Date.now();
@@ -187,7 +187,9 @@ function createTexture(gl) {
 }
 
 function hydrogenTexture(gl) {
+  // pixel size 64
   const icon = document.getElementById('icon');
+  console.log(icon);
 
   gl.activeTexture(gl.TEXTURE0 + 1);
 
@@ -195,34 +197,55 @@ function hydrogenTexture(gl) {
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
 
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, icon);
-  gl.generateMipmap(gl.TEXTURE_2D);
+  // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, icon);
+  // gl.generateMipmap(gl.TEXTURE_2D);
 
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-  /*
+  const red = [255,0,0,255]
+  const green = [0,255,0,255]
+  const blue = [0,0,255,255]
+  const black = [255,255,255,255]
+  const transparent = [0,0,0,0]
+
+  const outerRow = [...red, ...red,   ...red,   ...red]
+  const innerRow = [...blue, ...transparent,  ...transparent, ...transparent, ...transparent, ...transparent, ...transparent, ...blue]
+
+  const width = 8
+  const blueRow = Array(width).fill([...blue]).flat();
+  console.log(blueRow);
+
   gl.texImage2D(
     gl.TEXTURE_2D,
     0, // level
     gl.RGBA, // internalFormat,
-    4, // textureWidth,
-    4, // textureHeight
+    8, // textureWidth,
+    8, // textureHeight
+    /*
+    1, // textureWidth
+    1, // textureHeight
+    */
     0, // border,
     gl.RGBA, // format
     gl.UNSIGNED_BYTE, // type
-    /*
+    // new Uint8Array([...blue]) // data
     new Uint8Array([ // data
-        0,1,1,1,  0,1,1,1,  0,1,1,1,  0,1,1,1,
-        0,1,1,1,  0,1,1,1,  0,1,1,1,  0,1,1,1,
-        0,1,1,1,  0,1,1,1,  0,1,1,1,  0,1,1,1,
-        0,1,1,1,  0,1,1,1,  0,1,1,1,  0,1,1,1,
+        ...blueRow,
+        ...innerRow,
+        ...innerRow,
+        ...innerRow,
+        ...innerRow,
+        ...innerRow,
+        ...innerRow,
+        ...blueRow,
     ]),
   );
-  */
 
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); // possibly switch to GL_NEAREST for speed gains.
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); // possibly switch to GL_NEAREST for speed gains.
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -247,7 +270,7 @@ function hydrogenTexture(gl) {
 const fb1 = gl.createFramebuffer();
 gl.bindFramebuffer(gl.FRAMEBUFFER, fb1);
 const targetTexture1 = createTexture(gl)
-const hydrogenTex = hydrogenTexture(gl)
+hydrogenTexture(gl)
 
 // Create framebuffer2
 const fb2 = gl.createFramebuffer();
