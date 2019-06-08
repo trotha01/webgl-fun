@@ -13,6 +13,7 @@ if(!isWebGL2)
 
 canvas.addEventListener("webglcontextlost", function(event) {
     event.preventDefault();
+    throw 'WebGL 2 context lost'
 }, false);
 
 // -- Declare variables for the particle system
@@ -25,26 +26,23 @@ var appStartTime = Date.now();
 var currentSourceIdx = 0;
 
 var calcProgram = initCalcProgram('vs-calc', 'fs-calc');
-var viewProgram = initViewProgram('vs-draw', 'fs-draw');
 
 // Get uniform locations for the calc program
 var drawTimeLocation = gl.getUniformLocation(calcProgram, 'u_time');
-var drawColorLocation = gl.getUniformLocation(calcProgram, 'u_color');
+var atomTextureLocation = gl.getUniformLocation(calcProgram, "atomTexture");
 
 // -- Initialize particle data
 
 var particlePositions = new Float32Array(NUM_PARTICLES * 2);
 var particleVelocities = new Float32Array(NUM_PARTICLES * 2);
 var particleSpawntime = new Float32Array(NUM_PARTICLES);
-var particleLifetime = new Float32Array(NUM_PARTICLES);
 var particleIDs = new Float32Array(NUM_PARTICLES);
 
 var POSITION_LOCATION = 0;
 var VELOCITY_LOCATION = 1;
 var SPAWNTIME_LOCATION = 2;
-var LIFETIME_LOCATION = 3;
-var ID_LOCATION = 4;
-var NUM_LOCATIONS = 5;
+var ID_LOCATION = 3;
+var NUM_LOCATIONS = 4;
 
 for (var p = 0; p < NUM_PARTICLES; ++p) {
     particlePositions[p * 2] = 0.0; // x position
@@ -52,7 +50,6 @@ for (var p = 0; p < NUM_PARTICLES; ++p) {
     particleVelocities[p * 2] = 0.0; // x velocity
     particleVelocities[p * 2 + 1] = 0.0; // y velocity
     particleSpawntime[p] = 0.0;
-    particleLifetime[p] = 0.0;
     particleIDs[p] = p;
 }
 
@@ -88,12 +85,6 @@ for (var i = 0; i < particleVAOs.length; ++i) {
     gl.vertexAttribPointer(SPAWNTIME_LOCATION, 1, gl.FLOAT, false, 0, 0);
     gl.enableVertexAttribArray(SPAWNTIME_LOCATION);
 
-    particleVBOs[i][LIFETIME_LOCATION] = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, particleVBOs[i][LIFETIME_LOCATION]);
-    gl.bufferData(gl.ARRAY_BUFFER, particleLifetime, gl.STREAM_COPY);
-    gl.vertexAttribPointer(LIFETIME_LOCATION, 1, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(LIFETIME_LOCATION);
-
     particleVBOs[i][ID_LOCATION] = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, particleVBOs[i][ID_LOCATION]);
     gl.bufferData(gl.ARRAY_BUFFER, particleIDs, gl.STATIC_READ);
@@ -107,48 +98,7 @@ for (var i = 0; i < particleVAOs.length; ++i) {
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, particleVBOs[i][POSITION_LOCATION]);
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, particleVBOs[i][VELOCITY_LOCATION]);
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 2, particleVBOs[i][SPAWNTIME_LOCATION]);
-    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 3, particleVBOs[i][LIFETIME_LOCATION]);
 
-}
-
-function initViewProgram(vertShader, fragShader) {
-    // Setup viewProgram for viewing calc results
-    function createShader(gl, source, type) {
-        var shader = gl.createShader(type);
-        gl.shaderSource(shader, source);
-        gl.compileShader(shader);
-        return shader;
-    }
-
-    var vshader = createShader(gl, getShaderSource(vertShader), gl.VERTEX_SHADER);
-    var fshader = createShader(gl, getShaderSource(fragShader), gl.FRAGMENT_SHADER);
-
-    var viewProgram = gl.createProgram();
-    gl.attachShader(viewProgram, vshader);
-    gl.attachShader(viewProgram, fshader);
-
-    gl.linkProgram(viewProgram);
-
-    // check
-    var log = gl.getProgramInfoLog(viewProgram);
-    if (log) {
-        console.log(log);
-    }
-
-    log = gl.getShaderInfoLog(vshader);
-    if (log) {
-        console.log(log);
-    }
-
-    log = gl.getShaderInfoLog(fshader);
-    if (log) {
-        console.log(log);
-    }
-
-    gl.deleteShader(vshader);
-    gl.deleteShader(fshader);
-
-    return viewProgram;
 }
 
 function initCalcProgram(vertShader, fragShader) {
@@ -174,28 +124,34 @@ function initCalcProgram(vertShader, fragShader) {
 
     // check
     var log = gl.getProgramInfoLog(calcProgram);
+    var err = false;
     if (log) {
         console.log(log);
+        err = true;
     }
 
     log = gl.getShaderInfoLog(vshader);
     if (log) {
         console.log(log);
+        err = true;
     }
 
     log = gl.getShaderInfoLog(fshader);
     if (log) {
         console.log(log);
+        err = true;
     }
 
     gl.deleteShader(vshader);
     gl.deleteShader(fshader);
+    if (err) {
+      throw "error creating program"
+    }
 
     return calcProgram;
 }
 
 gl.useProgram(calcProgram);
-gl.uniform4f(drawColorLocation, 0.0, 1.0, 1.0, 1.0);
 
 function createTexture(gl) {
   const targetTexture = gl.createTexture();
@@ -217,7 +173,8 @@ function createTexture(gl) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-  // attach the texture as the first color attachment
+  // Attach the texture to the frame buffer so we can write to it.
+  // We attach it as the first color attachment, it will be written to by default when using the current framebuffer.
   gl.framebufferTexture2D(
     gl.FRAMEBUFFER,
     gl.COLOR_ATTACHMENT0, // attachmentPoint. Shader outputs here by linking 'out' variables
@@ -229,21 +186,102 @@ function createTexture(gl) {
   return targetTexture
 }
 
+function hydrogenTexture(gl) {
+  const icon = document.getElementById('icon');
+
+  gl.activeTexture(gl.TEXTURE0 + 1);
+
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, icon);
+  gl.generateMipmap(gl.TEXTURE_2D);
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  /*
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0, // level
+    gl.RGBA, // internalFormat,
+    4, // textureWidth,
+    4, // textureHeight
+    0, // border,
+    gl.RGBA, // format
+    gl.UNSIGNED_BYTE, // type
+    /*
+    new Uint8Array([ // data
+        0,1,1,1,  0,1,1,1,  0,1,1,1,  0,1,1,1,
+        0,1,1,1,  0,1,1,1,  0,1,1,1,  0,1,1,1,
+        0,1,1,1,  0,1,1,1,  0,1,1,1,  0,1,1,1,
+        0,1,1,1,  0,1,1,1,  0,1,1,1,  0,1,1,1,
+    ]),
+  );
+  */
+
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  /*
+  // attach the texture as the second color attachment
+  gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT1, // attachmentPoint
+    gl.TEXTURE_2D,
+    texture,
+    0, // mipmap level
+  );
+  */
+
+  // atomTextureLocation = gl.getUniformLocation(calcProgram, "atomTexture");
+  // gl.uniform1i(atomTextureLocation, 0);
+
+  return texture
+}
+
 // Create framebuffer1
 const fb1 = gl.createFramebuffer();
 gl.bindFramebuffer(gl.FRAMEBUFFER, fb1);
 const targetTexture1 = createTexture(gl)
+const hydrogenTex = hydrogenTexture(gl)
 
 // Create framebuffer2
 const fb2 = gl.createFramebuffer();
 gl.bindFramebuffer(gl.FRAMEBUFFER, fb2);
 const targetTexture2 = createTexture(gl)
+hydrogenTexture(gl)
+
+gl.activeTexture(gl.TEXTURE0);
 
 // Set the viewport
 gl.viewport(0, 0, canvas.width, canvas.height);
 
 // Set the clear color
-gl.clearColor(0.0, 0.0, 0.0, 1.0);
+gl.clearColor(0.0, 0.0, 0.0, 1.0); // black
+// gl.clearColor(1.0, 1.0, 1.0, 1.0); // white
+
+/* Print framebuffer to screen */
+function viewFramebuffer(fb) {
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fb);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  gl.blitFramebuffer(
+    0, 0, canvas.width, canvas.height, // src bounds
+    0, 0, canvas.width, canvas.height, // dest bounds
+    gl.COLOR_BUFFER_BIT,
+    gl.LINEAR,
+  )
+}
+
+// These alternate, so when we are reading from fb1 (which has targetTexture1),
+// we are writing to targetTexture2
+// Then we read from fb2 (which has targetTexture2)
+// and write to targetTexture1
+const framebuffers = [fb1, fb2]
+const textures = [targetTexture2, targetTexture1]
 
 function render() {
 
@@ -252,10 +290,10 @@ function render() {
     var time = Date.now() - appStartTime;
     var destinationIdx = (currentSourceIdx + 1) % 2;
 
-    // render to targetTexture1 in framebuffer1
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb1);
-    // gl.bindTexture(gl.TEXTURE_2D, targetTexture1);
-    // gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // write to this framebuffer
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffers[destinationIdx]);
+    // read from this texture
+    gl.bindTexture(gl.TEXTURE_2D, textures[destinationIdx]);
 
     // Clear color buffer
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -273,10 +311,10 @@ function render() {
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, particleVBOs[destinationIdx][POSITION_LOCATION]);
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, particleVBOs[destinationIdx][VELOCITY_LOCATION]);
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 2, particleVBOs[destinationIdx][SPAWNTIME_LOCATION]);
-    gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 3, particleVBOs[destinationIdx][LIFETIME_LOCATION]);
 
     // Set uniforms
     gl.uniform1f(drawTimeLocation, time);
+    gl.uniform1i(atomTextureLocation, 1);
 
     // Draw particles using transform feedback
     gl.beginTransformFeedback(gl.POINTS);
@@ -285,14 +323,7 @@ function render() {
   }
 
   // VIEW RESULT
-  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fb1);
-  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-  gl.blitFramebuffer(
-    0, 0, canvas.width, canvas.height, // src bounds
-    0, 0, canvas.width, canvas.height, // dest bounds
-    gl.COLOR_BUFFER_BIT,
-    gl.LINEAR,
-  )
+  viewFramebuffer(framebuffers[destinationIdx]);
 
   /*
   {
