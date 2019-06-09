@@ -63,9 +63,20 @@ var app = Elm.Main.init({
         out vec2 v_velocity;
         out float v_spawntime;
 
+        mat2 a;
+        vec2 b;
         vec4 pixel;
         vec2 velocity1;
         vec2 velocity2;
+
+        float v1ix, v1fx, v2ix, v2fx; // one dimensional vectors for now
+        float v1iy, v1fy, v2iy, v2fy; // one dimensional vectors for now
+        float m1 = 1.0;
+        float m2 = 1.0;
+        vec2 v12fx, v12fy, v1f;
+
+        // float canvas_size = 400.0;
+        // float pix_size = 1.0 / 400.0;
 
         float rand(vec2 co){
             return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
@@ -81,33 +92,65 @@ var app = Elm.Main.init({
           return velocity;
         }
 
-        vec2 collide(vec2 position, vec2 velocity) {
-          pixel = texture(texFramebuffer, position);
-          if (pixel.b > 0.0) {
-            return vec2(-velocity.x, -velocity.y);
-          }
-          return velocity;
+        vec2 texCoordFromPos(vec2 position) {
+          return vec2((position.x + 1.0)/2.0, (position.y + 1.0)/2.0);
+        }
+
+        vec2 collide(vec2 v1, vec2 v2) {
+          v1ix = v1.x;
+          v1iy = v1.y;
+          v2ix = v2.x;
+          v2iy = v2.y;
+
+          // We have the two equations for elastic collisions:
+          // v1i + v1f = v2i + v2f
+          // m1 * v1i + m2 * v2i = m1 * v1f + m2 * v2f;
+          // We have all the above variables, except v1f and v2f
+          // this means we have two equations with two unknown.
+          // We can transform this into the equation:
+          // | 1 -1  | * | v1f | = | v2i - v1i           |
+          // | m1 m2 |   | v2f |   | m1 * v1i + m2 * v2i |
+          //    a      *    x    = b
+          //
+          // Then solve for the [ v1f, v2f] vector.
+          //    x                = a ^ -1 * b
+          // We solve the above for both the x and y dimensions
+          // then only keep the v1f result.
+          a = mat2(1, m1, -1, m2);
+          b = vec2(v2ix - v1ix, m1 * v1ix + m2 * v2ix);
+          v12fx = vec2(inverse(a) * b);
+          v1fx = v12fx.x;
+          b = vec2(v2iy - v1iy, m1 * v1iy + m2 * v2iy);
+          v12fy = vec2(inverse(a) * b);
+          v1fy = v12fy.x;
+          return vec2(v1fx, v1fy);
+          // return velocity;
         }
 
         void main()
         {
             if (a_spawntime == 0.0) {
                 // Generate a new particle
-                v_position = vec2(0.0, 0.0);
+                v_position = vec2(a_ID/10.0, 0.0);
                 v_velocity = vec2(rand(vec2(a_ID, 0.0)) - 0.5, rand(vec2(a_ID, a_ID)));
                 v_spawntime = u_time;
             } else {
                 velocity1 = walls(a_position, a_velocity);
-                velocity2 = collide(a_position, velocity1);
+                pixel = texture(texFramebuffer, texCoordFromPos(v_position)); // get pixel at position
+                v1f = velocity1;
+                if (pixel.x > 0.0 && pixel.y > 0.0) {
+                  v1f = collide(velocity1, vec2(pixel));
+                }
 
-                v_velocity = velocity2;
-                v_position = a_position + 0.01 * velocity2;
+                v_velocity = v1f;
+                v_position = a_position + 0.01 * v_velocity;
 
 
                 v_spawntime = a_spawntime;
             }
 
             gl_Position = vec4(v_position, 0.0, 1.0);
+            // gl_Position = vec4(-1.0, 1.0, 0.0, 1.0);
             // gl_PointSize = 64.0;
             gl_PointSize = 8.0;
         }
@@ -120,15 +163,24 @@ var app = Elm.Main.init({
 
         uniform sampler2D atomTexture;
 
+        in vec2 v_velocity;
+
         out vec4 color;
+
+        vec4 pixel;
 
         void main()
         {
             // color = vec4(gl_PointCoord, 0.0, 1.0);
             // color = vec4(v_position, 0.0, 1.0);
             // color = texture(atomTexture, vec2(gl_FragCoord));
-            color = texture(atomTexture, vec2(gl_PointCoord));
             // color = vec4(0, 0, 1, 1);
+            // color = texture(atomTexture, vec2(1, 1));
+            // color = texture(atomTexture, vec2(gl_PointCoord));
+
+            // pixel = texture(atomTexture, vec2(1, 1));
+            pixel = texture(atomTexture, vec2(gl_PointCoord));
+            color = vec4(v_velocity.x, v_velocity.y, 1, pixel.a);
             // color = texture(atomTexture, vec2(1, 1));
         }
     </script>

@@ -19,7 +19,7 @@ canvas.addEventListener("webglcontextlost", function(event) {
 // -- Declare variables for the particle system
 
 // var NUM_PARTICLES = 1000000;
-var NUM_PARTICLES = 100;
+var NUM_PARTICLES = 10;
 var ACCELERATION = 0;
 
 var appStartTime = Date.now();
@@ -205,16 +205,16 @@ function hydrogenTexture(gl) {
 
   const red = [255,0,0,255]
   const green = [0,255,0,255]
-  const blue = [0,0,255,255]
+  const blue = [0,0,255,127]
   const black = [255,255,255,255]
   const transparent = [0,0,0,0]
 
   const outerRow = [...red, ...red,   ...red,   ...red]
-  const innerRow = [...blue, ...transparent,  ...transparent, ...transparent, ...transparent, ...transparent, ...transparent, ...blue]
+  const innerRow = [...black, ...transparent,  ...transparent, ...transparent, ...transparent, ...transparent, ...transparent, ...black]
 
   const width = 8
   const blueRow = Array(width).fill([...blue]).flat();
-  console.log(blueRow);
+  const blackRow = Array(width).fill([...black]).flat();
 
   gl.texImage2D(
     gl.TEXTURE_2D,
@@ -231,14 +231,14 @@ function hydrogenTexture(gl) {
     gl.UNSIGNED_BYTE, // type
     // new Uint8Array([...blue]) // data
     new Uint8Array([ // data
-        ...blueRow,
+        ...blackRow,
         ...innerRow,
         ...innerRow,
         ...innerRow,
         ...innerRow,
         ...innerRow,
         ...innerRow,
-        ...blueRow,
+        ...blackRow,
     ]),
   );
 
