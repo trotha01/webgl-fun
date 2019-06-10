@@ -1,5 +1,14 @@
 'use strict';
 
+var pause = false
+// toggle pause on spacebar
+document.body.onkeyup = function(e){
+    if(e.keyCode == 32){
+      pause = !pause;
+      console.log('pause', pause);
+    }
+}
+
 // -- Init Canvas
 const canvas = document.getElementById('transform-feedback');
 
@@ -11,6 +20,8 @@ if(!isWebGL2)
     throw 'WebGL 2 is not available'
 }
 
+gl.imageSmoothingEnabled = false;
+
 canvas.addEventListener("webglcontextlost", function(event) {
     event.preventDefault();
     throw 'WebGL 2 context lost'
@@ -19,7 +30,7 @@ canvas.addEventListener("webglcontextlost", function(event) {
 // -- Declare variables for the particle system
 
 // var NUM_PARTICLES = 1000000;
-var NUM_PARTICLES = 10;
+var NUM_PARTICLES = 2;
 var ACCELERATION = 0;
 
 var appStartTime = Date.now();
@@ -30,6 +41,7 @@ var calcProgram = initCalcProgram('vs-calc', 'fs-calc');
 // Get uniform locations for the calc program
 var drawTimeLocation = gl.getUniformLocation(calcProgram, 'u_time');
 var atomTextureLocation = gl.getUniformLocation(calcProgram, "atomTexture");
+var pictureLocation = gl.getUniformLocation(calcProgram, "picture");
 
 // -- Initialize particle data
 
@@ -52,6 +64,10 @@ for (var p = 0; p < NUM_PARTICLES; ++p) {
     particleSpawntime[p] = 0.0;
     particleIDs[p] = p;
 }
+
+// console.log(particlePositions);
+particlePositions = new Float32Array([0.5, 0.01, -0.5, 0.0])
+particleVelocities = new Float32Array([1.0, 0.0, 1.0, 0.0])
 
 // -- Init Vertex Arrays and Buffers
 var particleVAOs = [gl.createVertexArray(), gl.createVertexArray()];
@@ -189,7 +205,6 @@ function createTexture(gl) {
 function hydrogenTexture(gl) {
   // pixel size 64
   const icon = document.getElementById('icon');
-  console.log(icon);
 
   gl.activeTexture(gl.TEXTURE0 + 1);
 
@@ -242,10 +257,10 @@ function hydrogenTexture(gl) {
     ]),
   );
 
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
-  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); // possibly switch to GL_NEAREST for speed gains.
-  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); // possibly switch to GL_NEAREST for speed gains.
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); // possibly switch to GL_NEAREST for speed gains.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); // possibly switch to GL_NEAREST for speed gains.
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -278,6 +293,12 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, fb2);
 const targetTexture2 = createTexture(gl)
 hydrogenTexture(gl)
 
+gl.activeTexture(gl.TEXTURE0 + 3);
+gl.bindTexture(gl.TEXTURE_2D, targetTexture1);
+
+gl.activeTexture(gl.TEXTURE0 + 2);
+gl.bindTexture(gl.TEXTURE_2D, targetTexture2);
+
 gl.activeTexture(gl.TEXTURE0);
 
 // Set the viewport
@@ -307,6 +328,10 @@ const framebuffers = [fb1, fb2]
 const textures = [targetTexture2, targetTexture1]
 
 function render() {
+  if (pause) {
+    requestAnimationFrame(render);
+    return;
+  }
 
   // RUN CALCULATIONS
   {
@@ -338,6 +363,7 @@ function render() {
     // Set uniforms
     gl.uniform1f(drawTimeLocation, time);
     gl.uniform1i(atomTextureLocation, 1);
+    gl.uniform1i(pictureLocation, destinationIdx + 2);
 
     // Draw particles using transform feedback
     gl.beginTransformFeedback(gl.POINTS);
