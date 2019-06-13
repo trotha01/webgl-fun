@@ -7,6 +7,7 @@
     <script src="utility.js"></script>
     <script src="gl-matrix-min.js"></script>
     <script src="noise3D.js"></script>
+    <!-- script src="http://benvanik.github.com/WebGL-Inspector/core/embed.js"></script -->
     <!-- script type='text/javascript' src='../elm.js'></script -->
   </head>
 
@@ -18,8 +19,10 @@
       HTML5 canvas.</canvas>
     -->
 
-    <canvas id="transform-feedback" height=400 width=400>Your browser does not seem to support
-      HTML5 canvas.</canvas>
+    <canvas id="transform-feedback" height=50 width=50 style="position:absolute; top:20px">
+      Your browser does not seem to support HTML5 canvas.
+    </canvas>
+    <div id="pixel-data" style="position:absolute; top:100px; color:black; font-size:10px"></div>
 
     <script>
 /*
@@ -50,6 +53,7 @@ var app = Elm.Main.init({
         precision highp sampler3D;
 
         uniform float u_time;
+        uniform float u_delta;
         uniform sampler2D picture;
 
         // Possible optimization: compact in/out to one vector buffer
@@ -62,18 +66,20 @@ var app = Elm.Main.init({
         out vec2 v_position;
         out vec2 v_velocity;
         out float v_spawntime;
+        out vec2 v2i;
 
         mat2 a;
         vec2 b;
         vec4 pixel;
         vec2 velocity1;
         vec2 velocity2;
+        vec2 tmp;
 
         float v1ix, v1fx, v2ix, v2fx; // one dimensional vectors for now
         float v1iy, v1fy, v2iy, v2fy; // one dimensional vectors for now
         float m1 = 1.0;
         float m2 = 1.0;
-        vec2 v2i, v12fx, v12fy, v1f;
+        vec2 v12fx, v12fy, v1f;
         vec2 v1AfterWalls;
 
         float rand(vec2 co){
@@ -83,11 +89,17 @@ var app = Elm.Main.init({
         // convert color, range [0,1]
         // to velocity, range [-1,1]
         vec2 decodeVelocity(vec4 color) {
-          if (color.a > 0.90) {
+        // return (0,0) => movement
+        // return vec2(color) * 2.0 - 1.0 => twitch
+
+        // alpha currently is ALWAYS ~1
+        /*
+          if (color.a < 0.99) {
             return vec2(0.0, 0.0);
           }
+          */
+          // return vec2(0.0, 0.0);
           return vec2(color) * 2.0 - 1.0;
-          //   return vec2(0.0, 0.0);
         }
 
         vec2 walls(vec2 position, vec2 velocity) {
@@ -104,6 +116,8 @@ var app = Elm.Main.init({
         // to a tex coord, range [0, 1]
         vec2 texCoordFromPos(vec2 position) {
           return (position + 1.0) / 2.0;
+          // tmp = (position + 1.0) / 2.0;
+          // return vec2(-1.0 * tmp.x, tmp.y);
         }
 
         vec2 collide(vec2 v1, vec2 v2) {
@@ -155,7 +169,7 @@ var app = Elm.Main.init({
 
                 v1f = v1AfterWalls;
                 // only checking x velocity for now
-                if (v2i.x > 0.99 || v2i.x < -0.99) {
+                if (v2i.x > 0.5 || v2i.x < -0.5) {
                   // v1f = collide(velocity1, v2i);
                   v1f = v1f * -1.0;
                 }
@@ -163,7 +177,7 @@ var app = Elm.Main.init({
                 v_velocity = v1f;
                 // v_velocity = v2i;
                 // v_velocity = velocity1;
-                v_position = a_position + 0.01 * v_velocity;
+                v_position = a_position + u_delta * v_velocity;
 
 
                 v_spawntime = a_spawntime;
@@ -184,6 +198,7 @@ var app = Elm.Main.init({
         uniform sampler2D atomTexture;
 
         in vec2 v_velocity;
+        in vec2 v2i;
 
         out vec4 color;
 
@@ -222,6 +237,9 @@ var app = Elm.Main.init({
 
             pixel = texture(atomTexture, vec2(gl_PointCoord));
             color = vec4(encodeVelocity(v_velocity.x), encodeVelocity(v_velocity.y), 1.0, pixel.a);
+            if (gl_PointCoord.x < 0.1) {
+              color = vec4(v2i, 0, 1);
+            }
 
             // color = vec4(encodeVelocity(v_velocity.x), encodeVelocity(v_velocity.y), 1.0, 1.0);
         }

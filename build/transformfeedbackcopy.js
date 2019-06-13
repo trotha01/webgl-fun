@@ -40,6 +40,7 @@ var calcProgram = initCalcProgram('vs-calc', 'fs-calc');
 
 // Get uniform locations for the calc program
 var drawTimeLocation = gl.getUniformLocation(calcProgram, 'u_time');
+var deltaLocation = gl.getUniformLocation(calcProgram, 'u_delta');
 var atomTextureLocation = gl.getUniformLocation(calcProgram, "atomTexture");
 var pictureLocation = gl.getUniformLocation(calcProgram, "picture");
 
@@ -305,7 +306,8 @@ gl.activeTexture(gl.TEXTURE0);
 gl.viewport(0, 0, canvas.width, canvas.height);
 
 // Set the clear color
-gl.clearColor(0.0, 0.0, 0.0, 1.0); // black
+// gl.clearColor(0.0, 0.0, 0.0, 0.0); // transparent
+gl.clearColor(0.5, 0.5, 0.5, 1.0); // gray, velocity 0
 // gl.clearColor(1.0, 1.0, 1.0, 1.0); // white
 
 /* Print framebuffer to screen */
@@ -318,6 +320,40 @@ function viewFramebuffer(fb) {
     gl.COLOR_BUFFER_BIT,
     gl.LINEAR,
   )
+
+  // Below is for writting the raw data for debugging
+  const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+  gl.readPixels(0, 0, canvas.width, canvas.height,
+    gl.RGBA, // internalFormat,
+    gl.UNSIGNED_BYTE, // type
+    pixels);
+  const dataWrapper = document.getElementById('pixel-data');
+  // remove all previous data
+  while (dataWrapper.firstChild) {
+    dataWrapper.removeChild(dataWrapper.firstChild);
+  }
+
+  // add new data
+  console.log('height', canvas.height)
+  console.log('width', canvas.width)
+  for (var i = 0; i < canvas.height; i++) {
+    var row = document.createElement("div");
+    for (var j = 0; j < canvas.width*4; j+=4) {
+      var column = document.createElement("span");
+      var r = pixels[i * canvas.width * 4 + j + 0]
+      var g = pixels[i * canvas.width * 4 + j + 1]
+      var b = pixels[i * canvas.width * 4 + j + 2]
+      var a = pixels[i * canvas.width * 4 + j + 3]
+      var pixelData = document.createTextNode(
+        '[' + r + ' ' + g + ' ' + b + ' ' + a + '] '
+      );
+      column.appendChild(pixelData);
+      column.style.backgroundColor = 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')'
+      row.appendChild(column);
+    }
+    dataWrapper.appendChild(row);
+  }
+  // console.log(pixels);
 }
 
 // These alternate, so when we are reading from fb1 (which has targetTexture1),
@@ -327,11 +363,16 @@ function viewFramebuffer(fb) {
 const framebuffers = [fb1, fb2]
 const textures = [targetTexture2, targetTexture1]
 
-function render() {
+var lastTimestamp = performance.now();
+var delta = 0.01;
+function render(timestamp) {
   if (pause) {
     requestAnimationFrame(render);
     return;
   }
+  delta = Math.min((timestamp - lastTimestamp) / 1000, 0.01);
+  lastTimestamp = timestamp;
+  console.log('delta', delta);
 
   // RUN CALCULATIONS
   {
@@ -362,6 +403,7 @@ function render() {
 
     // Set uniforms
     gl.uniform1f(drawTimeLocation, time);
+    gl.uniform1f(deltaLocation, delta);
     gl.uniform1i(atomTextureLocation, 1);
     gl.uniform1i(pictureLocation, destinationIdx + 2);
 
@@ -414,3 +456,26 @@ requestAnimationFrame(render);
 //         gl.deleteBuffer(particleVBOs[i][j]);
 //     }
 // }
+
+// step forward and backward
+document.body.onkeydown = function(e){
+    // left arrow
+    // step backwards
+    if(e.keyCode == 37){
+      console.log('step backward', pause);
+      lastTimestamp = 0;
+      pause = !pause;
+      render(-10);
+      pause = !pause;
+    }
+
+    // right arrow
+    // step forward
+    if(e.keyCode == 39){
+      console.log('step forward', pause);
+      lastTimestamp = 0;
+      pause = !pause;
+      render(10);
+      pause = !pause;
+    }
+}
