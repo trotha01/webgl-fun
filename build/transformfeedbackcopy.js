@@ -9,12 +9,45 @@ document.body.onkeyup = function(e){
     }
 }
 
+// Setup Debugging Utils
+function validateNoneOfTheArgsAreUndefined(functionName, args) {
+  for (var ii = 0; ii < args.length; ++ii) {
+    if (args[ii] === undefined) {
+      console.error("undefined passed to gl." + functionName + "(" +
+        WebGLDebugUtils.glFunctionArgsToString(functionName, args) + ")");
+    }
+  }
+} 
+
+function throwOnGLError(err, funcName, args) {
+  throw WebGLDebugUtils.glEnumToString(err) + " was caused by call to: " + funcName;
+};
+
+function logGLCall(functionName, args) {
+  /*
+   const arg6 = args[6];
+   if (functionName === 'gl.readPixels') {
+     args[6] = "[buffer]"; // don't print entire array
+     return;
+   }
+   */
+   console.log("gl." + functionName + "(" +
+      WebGLDebugUtils.glFunctionArgsToString(functionName, args) + ")");
+   // args[6] = arg6;
+}
+
+function logAndValidate(functionName, args) {
+   logGLCall(functionName, args);
+   validateNoneOfTheArgsAreUndefined(functionName, args);
+}
+
 // -- Init Canvas
 const canvas = document.getElementById('transform-feedback');
 
 // -- Init WebGL Context
-const gl = canvas.getContext('webgl2', { antialias: false });
-var isWebGL2 = !!gl;
+const canvasGl = canvas.getContext('webgl2', { antialias: false });
+const gl = WebGLDebugUtils.makeDebugContext(canvasGl, throwOnGLError, logAndValidate);
+const isWebGL2 = !!gl;
 if(!isWebGL2)
 {
     throw 'WebGL 2 is not available'
@@ -187,6 +220,8 @@ function createTexture(gl) {
 
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.CLAMP_TO_EDGE);
+  // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -238,14 +273,9 @@ function hydrogenTexture(gl) {
     gl.RGBA, // internalFormat,
     8, // textureWidth,
     8, // textureHeight
-    /*
-    1, // textureWidth
-    1, // textureHeight
-    */
     0, // border,
     gl.RGBA, // format
     gl.UNSIGNED_BYTE, // type
-    // new Uint8Array([...blue]) // data
     new Uint8Array([ // data
         ...blackRow,
         ...innerRow,
@@ -260,8 +290,8 @@ function hydrogenTexture(gl) {
 
   // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
   // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); // possibly switch to GL_NEAREST for speed gains.
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); // possibly switch to GL_NEAREST for speed gains.
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST); // possibly switch to GL_NEAREST for speed gains.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
@@ -294,6 +324,18 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, fb2);
 const targetTexture2 = createTexture(gl)
 hydrogenTexture(gl)
 
+// Attach textures to framebuffers,
+// not quite sure if this is right
+gl.bindFramebuffer(gl.FRAMEBUFFER, fb1);
+gl.activeTexture(gl.TEXTURE0 + 3);
+gl.bindTexture(gl.TEXTURE_2D, targetTexture1);
+
+gl.activeTexture(gl.TEXTURE0 + 2);
+gl.bindTexture(gl.TEXTURE_2D, targetTexture2);
+
+gl.activeTexture(gl.TEXTURE0);
+
+gl.bindFramebuffer(gl.FRAMEBUFFER, fb2);
 gl.activeTexture(gl.TEXTURE0 + 3);
 gl.bindTexture(gl.TEXTURE_2D, targetTexture1);
 
@@ -306,11 +348,13 @@ gl.activeTexture(gl.TEXTURE0);
 gl.viewport(0, 0, canvas.width, canvas.height);
 
 // Set the clear color
-// gl.clearColor(0.0, 0.0, 0.0, 0.0); // transparent
-gl.clearColor(0.5, 0.5, 0.5, 1.0); // gray, velocity 0
+gl.clearColor(0.0, 0.0, 0.0, 0.0); // transparent
+// gl.clearColor(0.5, 0.5, 0.5, 1.0); // gray, velocity 0
 // gl.clearColor(1.0, 1.0, 1.0, 1.0); // white
 
-/* Print framebuffer to screen */
+
+/* Print framebuffer to screen and grab pixel info*/
+var pixels = new Uint8Array(canvas.width * canvas.height * 4);
 function viewFramebuffer(fb) {
   gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fb);
   gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
@@ -322,11 +366,11 @@ function viewFramebuffer(fb) {
   )
 
   // Below is for writting the raw data for debugging
-  const pixels = new Uint8Array(canvas.width * canvas.height * 4);
   gl.readPixels(0, 0, canvas.width, canvas.height,
     gl.RGBA, // internalFormat,
     gl.UNSIGNED_BYTE, // type
     pixels);
+  /*
   const dataWrapper = document.getElementById('pixel-data');
   // remove all previous data
   while (dataWrapper.firstChild) {
@@ -334,8 +378,6 @@ function viewFramebuffer(fb) {
   }
 
   // add new data
-  console.log('height', canvas.height)
-  console.log('width', canvas.width)
   for (var i = 0; i < canvas.height; i++) {
     var row = document.createElement("div");
     for (var j = 0; j < canvas.width*4; j+=4) {
@@ -354,6 +396,43 @@ function viewFramebuffer(fb) {
     dataWrapper.appendChild(row);
   }
   // console.log(pixels);
+  */
+}
+
+function pad(n, width, z) {
+  z = z || '0';
+  n = n + '';
+  return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+}
+
+function displayPixelInfo(e) {
+  const x=e.clientX;
+  const y=e.clientY;
+
+  const pixelDataDiv = document.getElementById('pixel-info');
+  // remove all previous data
+  while (pixelDataDiv.firstChild) {
+    pixelDataDiv.removeChild(pixelDataDiv.firstChild);
+  }
+
+  // add new data
+  var column = document.createElement("span");
+  var r = pixels[y * canvas.width * 4 + x*4 + 0]
+  var g = pixels[y * canvas.width * 4 + x*4 + 1]
+  var b = pixels[y * canvas.width * 4 + x*4 + 2]
+  var a = pixels[y * canvas.width * 4 + x*4 + 3]
+  var pixelData = document.createTextNode(
+    '[' + pad(r, 3, '-') + ' ' + pad(g, 3, '-') + ' ' + pad(b, 3, '-') + ' ' + pad(a, 3, '-') + '] '
+  );
+  // console.log(pixelData);
+  column.appendChild(pixelData);
+  column.style.backgroundColor = 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+  column.style.fontFamily = 'monospace';
+  if (r < 10) { // make font white if background is dark
+    // console.log('rgba(' + r + ',' + g + ',' + b + ',' + a + ')');
+    column.style.color = 'white';
+  }
+  pixelDataDiv.appendChild(column);
 }
 
 // These alternate, so when we are reading from fb1 (which has targetTexture1),
@@ -406,6 +485,7 @@ function render(timestamp) {
     gl.uniform1f(deltaLocation, delta);
     gl.uniform1i(atomTextureLocation, 1);
     gl.uniform1i(pictureLocation, destinationIdx + 2);
+    // gl.uniform1i(pictureLocation, 0);
 
     // Draw particles using transform feedback
     gl.beginTransformFeedback(gl.POINTS);
