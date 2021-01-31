@@ -8,7 +8,7 @@
     <script src="gl-matrix-min.js"></script>
     <script src="noise3D.js"></script>
     <script src="webgl-debug.js"></script>
-    <!-- script src="http://benvanik.github.com/WebGL-Inspector/core/embed.js"></script -->
+    <!-- script src="webgl-inspector.js"></script -->
     <!-- script type='text/javascript' src='../elm.js'></script -->
   </head>
 
@@ -23,7 +23,7 @@
     <canvas id="transform-feedback" height=50 width=50 style="position:absolute; top:0px; left: 0px;" onmousemove="displayPixelInfo(event)">
       Your browser does not seem to support HTML5 canvas.
     </canvas>
-    <div id="pixel-info" style="position:absolute; top:100px; color:black; font-size:10px"></div>
+    <div id="pixel-info" style="position:absolute; top:100px; color:black; font-size:6px"></div>
     <!-- div id="pixel-data" style="position:absolute; top:100px; color:black; font-size:10px"></div -->
 
     <script>
@@ -172,7 +172,7 @@ var app = Elm.Main.init({
                 v1f = v1AfterWalls;
                 // only checking x velocity for now
                 if (v2i.x > 0.5 || v2i.x < -0.5) {
-                  // v1f = collide(velocity1, v2i);
+                  v1f = collide(velocity1, v2i);
                   // v1f = v1f * -1.0;
                 }
 
@@ -248,10 +248,11 @@ var app = Elm.Main.init({
                          pixel.a
                         );
 
-            if (gl_PointCoord.x < 0.1) {
+            if (gl_PointCoord.x < 0.2) {
               color = vec4(v2i, 0.0, 1.0);
             }
             // color = vec4(v_velocity.x, v_velocity.y, 1.0, 1.0);
+            color = texture(atomTexture, vec2(gl_PointCoord));
 
             // color = vec4(encodeVelocity(v_velocity.x), encodeVelocity(v_velocity.y), 1.0, 1.0);
         }

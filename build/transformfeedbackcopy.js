@@ -37,7 +37,7 @@ function logGLCall(functionName, args) {
 }
 
 function logAndValidate(functionName, args) {
-   logGLCall(functionName, args);
+   // logGLCall(functionName, args);
    validateNoneOfTheArgsAreUndefined(functionName, args);
 }
 
@@ -59,6 +59,10 @@ canvas.addEventListener("webglcontextlost", function(event) {
     event.preventDefault();
     throw 'WebGL 2 context lost'
 }, false);
+
+console.log('point size range:', gl.ALIASED_POINT_SIZE_RANGE)
+console.log('point size granularity:', gl.ALIASED_POINT_SIZE_GRANULARITY)
+console.log('point size granularity:', gl.POINT_SIZE_GRANULARITY)
 
 // -- Declare variables for the particle system
 
@@ -203,7 +207,7 @@ function initCalcProgram(vertShader, fragShader) {
 
 gl.useProgram(calcProgram);
 
-function createTexture(gl) {
+function createFramebufferTexture(gl) {
   const targetTexture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, targetTexture);
   gl.texImage2D(
@@ -242,22 +246,25 @@ function hydrogenTexture(gl) {
   // pixel size 64
   const icon = document.getElementById('icon');
 
-  gl.activeTexture(gl.TEXTURE0 + 1);
-
   const texture = gl.createTexture();
+  gl.activeTexture(gl.TEXTURE0 + 1);
   gl.bindTexture(gl.TEXTURE_2D, texture);
+
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
 
   // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, icon);
   // gl.generateMipmap(gl.TEXTURE_2D);
 
   gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  // gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.blendFunc(gl.ONE, gl.ONE);
+  gl.blendEquation(gl.FUNC_ADD);
 
   const red = [255,0,0,255]
   const green = [0,255,0,255]
   const blue = [0,0,255,127]
-  const black = [255,255,255,255]
+  const white = [255,255,255,255]
+  const black = [0,0,0,255]
   const transparent = [0,0,0,0]
 
   const outerRow = [...red, ...red,   ...red,   ...red]
@@ -270,13 +277,13 @@ function hydrogenTexture(gl) {
   gl.texImage2D(
     gl.TEXTURE_2D,
     0, // level
-    gl.RGBA, // internalFormat,
-    8, // textureWidth,
+    gl.RGBA32F, // internalFormat, also tried gl.RGBA
+    8, // textureWidth
     8, // textureHeight
     0, // border,
     gl.RGBA, // format
-    gl.UNSIGNED_BYTE, // type
-    new Uint8Array([ // data
+    gl.FLOAT, // type, also tried gl.UNSIGNED_BYTE
+    new Float32Array([ // data, also tried Uint8Array
         ...blackRow,
         ...innerRow,
         ...innerRow,
@@ -315,17 +322,18 @@ function hydrogenTexture(gl) {
 // Create framebuffer1
 const fb1 = gl.createFramebuffer();
 gl.bindFramebuffer(gl.FRAMEBUFFER, fb1);
-const targetTexture1 = createTexture(gl)
-hydrogenTexture(gl)
+const targetTexture1 = createFramebufferTexture(gl)
+const hydrogen = hydrogenTexture(gl)
 
 // Create framebuffer2
 const fb2 = gl.createFramebuffer();
 gl.bindFramebuffer(gl.FRAMEBUFFER, fb2);
-const targetTexture2 = createTexture(gl)
+const targetTexture2 = createFramebufferTexture(gl)
 hydrogenTexture(gl)
 
 // Attach textures to framebuffers,
 // not quite sure if this is right
+/*
 gl.bindFramebuffer(gl.FRAMEBUFFER, fb1);
 gl.activeTexture(gl.TEXTURE0 + 3);
 gl.bindTexture(gl.TEXTURE_2D, targetTexture1);
@@ -341,6 +349,7 @@ gl.bindTexture(gl.TEXTURE_2D, targetTexture1);
 
 gl.activeTexture(gl.TEXTURE0 + 2);
 gl.bindTexture(gl.TEXTURE_2D, targetTexture2);
+*/
 
 gl.activeTexture(gl.TEXTURE0);
 
@@ -369,6 +378,7 @@ function viewFramebuffer(fb) {
   gl.readPixels(0, 0, canvas.width, canvas.height,
     gl.RGBA, // internalFormat,
     gl.UNSIGNED_BYTE, // type
+    // gl.FLOAT, // type
     pixels);
   /*
   const dataWrapper = document.getElementById('pixel-data');
@@ -416,23 +426,32 @@ function displayPixelInfo(e) {
   }
 
   // add new data
-  var column = document.createElement("span");
-  var r = pixels[y * canvas.width * 4 + x*4 + 0]
-  var g = pixels[y * canvas.width * 4 + x*4 + 1]
-  var b = pixels[y * canvas.width * 4 + x*4 + 2]
-  var a = pixels[y * canvas.width * 4 + x*4 + 3]
-  var pixelData = document.createTextNode(
-    '[' + pad(r, 3, '-') + ' ' + pad(g, 3, '-') + ' ' + pad(b, 3, '-') + ' ' + pad(a, 3, '-') + '] '
-  );
-  // console.log(pixelData);
-  column.appendChild(pixelData);
-  column.style.backgroundColor = 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
-  column.style.fontFamily = 'monospace';
-  if (r < 10) { // make font white if background is dark
-    // console.log('rgba(' + r + ',' + g + ',' + b + ',' + a + ')');
-    column.style.color = 'white';
+  for(var i = y - 5; i < y + 6; i++) {
+    var row = document.createElement("div");
+    for(var j = x - 5; j < x + 6; j++) {
+      var column = document.createElement("span");
+      var r = pixels[i * canvas.width * 4 + j*4 + 0]
+      var g = pixels[i * canvas.width * 4 + j*4 + 1]
+      var b = pixels[i * canvas.width * 4 + j*4 + 2]
+      var a = pixels[i * canvas.width * 4 + j*4 + 3]
+      var pixelData = document.createTextNode(
+	'[' + pad(r, 3, '-') + ' ' + pad(g, 3, '-') + ' ' + pad(b, 3, '-') + ' ' + pad(a, 3, '-') + '] '
+      );
+      column.appendChild(pixelData);
+      column.style.backgroundColor = 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+      column.style.fontFamily = 'monospace';
+      // console.log('rgba(' + r + ',' + g + ',' + b + ',' + a + ')');
+      if (r < 10) { // make font white if background is dark
+	column.style.color = 'white';
+      }
+      if (a === 0) {
+	column.style.color = 'black';
+      }
+
+      row.appendChild(column);
+    }
+    pixelDataDiv.appendChild(row);
   }
-  pixelDataDiv.appendChild(column);
 }
 
 // These alternate, so when we are reading from fb1 (which has targetTexture1),
@@ -452,6 +471,8 @@ function render(timestamp) {
   delta = Math.min((timestamp - lastTimestamp) / 1000, 0.01);
   lastTimestamp = timestamp;
   console.log('delta', delta);
+
+  // gl.blendEquation(gl.FUNC_ADD);
 
   // RUN CALCULATIONS
   {
@@ -484,8 +505,8 @@ function render(timestamp) {
     gl.uniform1f(drawTimeLocation, time);
     gl.uniform1f(deltaLocation, delta);
     gl.uniform1i(atomTextureLocation, 1);
-    gl.uniform1i(pictureLocation, destinationIdx + 2);
-    // gl.uniform1i(pictureLocation, 0);
+    // gl.uniform1i(pictureLocation, destinationIdx + 2);
+    gl.uniform1i(pictureLocation, 0);
 
     // Draw particles using transform feedback
     gl.beginTransformFeedback(gl.POINTS);
